@@ -70,6 +70,14 @@ class InSARProcessor:
             self.logger.info("Dry run, not submitting jobs")
             return
 
+        # Check if there are enough credits to submit jobs
+        cost_per_pair = 10 if kwargs.get("looks", "20x4") == "20x4" else 15
+        total_cost = len(sbas_pairs) * cost_per_pair
+        credits = self.hyp3.check_credits()
+        if total_cost > credits:
+            self.logger.error("Not enough credits to submit jobs")
+            return
+
         jobs = Batch()
 
         try:
