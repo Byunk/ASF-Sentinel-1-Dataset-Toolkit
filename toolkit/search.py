@@ -55,6 +55,8 @@ if __name__ == "__main__":
     # Save the results to a file
     with open("stack_data.txt", "w") as f:
         for item in results:
-            file_id = item.properties["fileID"]
+            file_id = item.properties["sceneName"]
             start_time = item.properties["startTime"]
             f.write(f"{file_id},{start_time}\n")
+
+    print("Granules saved to stack_data.txt")
