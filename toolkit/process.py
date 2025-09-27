@@ -33,8 +33,10 @@ class InSARProcessor:
         self,
         stack: pd.DataFrame,
         max_temporal_baseline: int = 24,
+        batch_size: int = 50,
         project_name: str | None = None,
         output_dir: Path | str = ".",
+        download: bool = True,
         dry_run: bool = False,
         **kwargs,
     ) -> None:
@@ -44,8 +46,10 @@ class InSARProcessor:
         Args:
             stack: a pandas DataFrame of the stack
             max_temporal_baseline: the maximum temporal baseline
+            batch_size: the number of jobs to submit at a time
             project_name: the name of the project
             output_dir: the directory to save the results
+            download: whether to download the results
             dry_run: whether to dry run the job submission
             **kwargs: additional arguments to pass to the hyp3.submit_insar_job method
 
@@ -78,28 +82,41 @@ class InSARProcessor:
             self.logger.error("Not enough credits to submit jobs")
             return
 
-        jobs = Batch()
-
-        try:
+        sbas_pairs_list = list(sbas_pairs)
+        for i in range(0, len(sbas_pairs_list), batch_size):
+            batch_pairs = sbas_pairs_list[i:i+batch_size]
+            batch_jobs = Batch()
             for reference, secondary in tqdm(
-                sbas_pairs,
-                desc="Submitting InSAR jobs",
+                batch_pairs,
+                desc=f"Submitting InSAR jobs [{i+1}-{min(i+batch_size, len(sbas_pairs_list))}]",
                 unit="pair",
                 disable=not self.logger.isEnabledFor(logging.INFO),
             ):
-                jobs += self.hyp3.submit_insar_job(
-                    reference,
-                    secondary,
-                    name=project_name,
-                    # Compatibility with MintPy
-                    include_dem=True,
-                    include_look_vectors=True,
-                    **kwargs,
-                )
-        except Exception as e:
-            self.logger.error("Error submitting jobs: %s", e)
+                try:
+                    batch_jobs += self.hyp3.submit_insar_job(
+                        reference,
+                        secondary,
+                        name=project_name,
+                        # Compatibility with MintPy
+                        include_dem=True,
+                        include_look_vectors=True,
+                        **kwargs,
+                    )
+                except Exception as e:
+                    self.logger.error("Error submitting job for pair (%s, %s): %s", reference, secondary, e)
+                    continue
 
-        self.logger.info("Watching job progress...")
-        jobs = self.hyp3.watch(jobs)
-        self.logger.info("Downloading files to %s", output_dir)
-        jobs.download_files(output_dir)
+            if len(batch_jobs) == 0:
+                self.logger.warning("No jobs were submitted in this batch.")
+                continue
+
+            try:
+                self.logger.info("Submitting %d jobs", len(batch_jobs))
+                self.logger.info("Watching job progress...")
+                jobs = self.hyp3.watch(batch_jobs)
+                if download:
+                    self.logger.info("Downloading files to %s", output_dir)
+                    jobs.download_files(output_dir)
+            except Exception as e:
+                self.logger.error("Error processing batch [%d-%d]: %s", i+1, min(i+batch_size, len(sbas_pairs_list)), e)
+                continue
