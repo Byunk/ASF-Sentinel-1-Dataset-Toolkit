@@ -1,43 +1,60 @@
+import argparse
 import logging
-from datetime import datetime, timezone
+
 from toolkit.process import InSARProcessor
-from toolkit.search import granule_search
+from toolkit.search import baseline_search
 
 logger = logging.getLogger(__name__)
 asf_logger = logging.getLogger("asf_search")
 asf_logger.setLevel(logging.WARNING)
 
 
-def main():
+def main(
+    reference_id: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    project_name: str | None = None,
+    output_dir: str = "data",
+):
+    stack = baseline_search(reference_id, start_date=start_date, end_date=end_date)
+
     processor = InSARProcessor()
-
-    # Sample granule for Myanmar earthquake
-    base_granule = "S1A_IW_SLC__1SDV_20240315T113941_20240315T114008_052992_066A52_7EFF"
-    start_date = datetime(2025, 1, 1).replace(tzinfo=timezone.utc)
-    end_date = datetime(2025, 4, 1).replace(tzinfo=timezone.utc)
-    granules = granule_search([base_granule], start_date=start_date, end_date=end_date)
-    logger.info("Found %d granules", len(granules))
-
-    # Convert the granules to a list of its file IDs
-    granule_ids = [granule.properties["sceneName"] for granule in granules if granule.properties["sceneName"] != base_granule]
-
-    # Submit the jobs
-    processor.submit(
-        base_granule,
-        granule_ids,
-        location="data",
+    processor.submit_with_temporal_baselines(
+        stack,
+        project_name=project_name,
+        output_dir=output_dir,
         looks="10x2",  # Better resolution than 20x4
         include_wrapped_phase=True,
         include_los_displacement=True,
         include_displacement_maps=True,
         apply_water_mask=True,
-        # Compatibility with MintPy
-        include_dem=True,
-        include_look_vectors=True,
     )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "reference_id",
+        type=str,
+        help="Reference product ID (e.g. S1A_IW_SLC__1SSV_20141213T093112_20141213T093140_003699_004641_E1DC-SLC)",
+    )
+    parser.add_argument("--start", type=str)
+    parser.add_argument("--end", type=str)
+    parser.add_argument("--project_name", type=str, help="Optional project name")
+    parser.add_argument(
+        "--output_dir", type=str, help="Output directory", default="data"
+    )
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    main()
+    args = parse_args()
+    main(
+        reference_id=args.reference_id,
+        start_date=getattr(args, "start", None),
+        end_date=getattr(args, "end", None),
+        project_name=getattr(args, "project_name", None),
+        output_dir=getattr(args, "output_dir", "data"),
+    )

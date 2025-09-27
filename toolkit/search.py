@@ -6,57 +6,87 @@ References:
 - https://github.com/asfadmin/Discovery-asf_search/blob/master/examples/0-Intro.md
 """
 
-from datetime import datetime
-from typing import Any
+from datetime import datetime, timezone
+import logging
 
 import asf_search as asf
+import pandas as pd
+from dateutil.parser import parse as parse_date
+
+logger = logging.getLogger(__name__)
 
 
-def granule_search(
-    granule_list: list[str],
-    start_date: datetime | None = None,
-    end_date: datetime | None = None,
-) -> list[Any]:
+def baseline_search(
+    reference_id: str,
+    start_date: datetime | str | None = None,
+    end_date: datetime | str | None = None,
+) -> pd.DataFrame:
     """
-    Baseline search for the given granule
+    Search for baselines with a reference ID
 
     Args:
-        granule_list: List of granules to search for
-        start_date: Start date to filter the stack by
-        end_date: End date to filter the stack by
+        reference_id: The ID of the reference granule
+        start_date: The start date of the search
+        end_date: The end date of the search
 
     Returns:
-        List of granules that match the given conditions
+        A pandas DataFrame of the search results
     """
-    results = asf.granule_search(granule_list)
-    reference = results[0]
-    stack = reference.stack()
+    if isinstance(start_date, str):
+        start_date = parse_date(start_date).replace(tzinfo=timezone.utc)
+    if isinstance(end_date, str):
+        end_date = parse_date(end_date).replace(tzinfo=timezone.utc)
 
-    # Filter stack by the given conditions
-    filtered = []
-    for item in stack:
-        item_start_time = datetime.fromisoformat(
-            item.properties["startTime"].replace("Z", "+00:00")
-        )
-        if start_date is not None and item_start_time < start_date:
-            continue
-        if end_date is not None and item_start_time > end_date:
-            continue
-        filtered.append(item)
+    logger.info("Searching for baselines with reference ID: %s", reference_id)
+    logger.info("  Start date: %s", start_date)
+    logger.info("  End date: %s", end_date)
 
-    return filtered
+    baseline_results = asf.stack_from_id(reference_id)
+
+    columns = list(baseline_results[0].properties.keys()) + [
+        "geometry",
+    ]
+    data = [
+        list(scene.properties.values())
+        + [
+            scene.geometry,
+        ]
+        for scene in baseline_results
+    ]
+
+    stack = pd.DataFrame(data, columns=columns)
+    stack["startTime"] = stack.startTime.apply(parse_date)
+
+    reference = stack.loc[stack.fileID == reference_id].iloc[0]
+
+    # Filter stack by frame number and path number
+    stack = stack.loc[
+        (reference.frameNumber == stack.frameNumber)
+        & (reference.pathNumber == stack.pathNumber)
+    ]
+
+    if start_date is not None:
+        stack = stack.loc[stack.startTime >= start_date]
+    if end_date is not None:
+        stack = stack.loc[stack.startTime <= end_date]
+
+    logger.info("Found %d results", len(stack))
+    return stack
 
 
 if __name__ == "__main__":
-    results = granule_search(
-        ["S1A_IW_GRDH_1SDV_20250403T113936_20250403T114001_058592_074094_8683"]
+    logging.basicConfig(level=logging.DEBUG)
+
+    reference_id = (
+        "S1A_IW_SLC__1SSV_20141213T093112_20141213T093140_003699_004641_E1DC-SLC"
     )
+    results = baseline_search(reference_id)
 
     # Save the results to a file
     with open("stack_data.txt", "w") as f:
-        for item in results:
-            file_id = item.properties["sceneName"]
-            start_time = item.properties["startTime"]
-            f.write(f"{file_id},{start_time}\n")
+        for item in results.itertuples():
+            scene_name = item.sceneName
+            start_time = item.startTime
+            f.write(f"{scene_name},{start_time}\n")
 
-    print("Granules saved to stack_data.txt")
+    logger.info("%d items saved to stack_data.txt", len(results))

@@ -5,9 +5,12 @@ References:
 - https://hyp3-docs.asf.alaska.edu/using/sdk/
 """
 
+import logging
 import os
 from pathlib import Path
 from hyp3_sdk import HyP3, Batch
+import pandas as pd
+from tqdm import tqdm
 
 
 class InSARProcessor:
@@ -24,28 +27,56 @@ class InSARProcessor:
             raise ValueError("Username and password are required")
 
         self.hyp3 = HyP3(username=username, password=password)
+        self.logger = logging.getLogger(__name__)
 
-    def submit(
+    def submit_with_temporal_baselines(
         self,
-        reference_granule_id: str,
-        granule_list: list[str],
-        location: Path | str = ".",
+        stack: pd.DataFrame,
+        max_temporal_baseline: int = 24,
+        project_name: str | None = None,
+        output_dir: Path | str = ".",
         **kwargs,
     ) -> None:
         """
-        Submit a batch of InSAR jobs
-
-        Args:
-            reference_granule_id: The ID of the reference granule
-            granule_list: The list of secondary granules to process
-            location: The location to download the files to
-            **kwargs: Additional arguments to pass to the `HyP3.submit_insar_job` method
-
-        Returns:
-            None
+        Submit a batch of InSAR jobs with temporal baselines
         """
+        sbas_pairs = set()
+
+        for reference, rt in stack.loc[
+            ::-1, ["sceneName", "temporalBaseline"]
+        ].itertuples(index=False):
+            secondaries = stack.loc[
+                (stack.sceneName != reference)
+                & (stack.temporalBaseline - rt <= max_temporal_baseline)
+                & (stack.temporalBaseline - rt > 0)
+            ]
+            for secondary in secondaries.sceneName:
+                sbas_pairs.add((reference, secondary))
+
+        self.logger.info("Submitting %d pairs", len(sbas_pairs))
+
         jobs = Batch()
-        for granule in granule_list:
-            jobs += self.hyp3.submit_insar_job(reference_granule_id, granule, **kwargs)
+
+        try:
+            for reference, secondary in tqdm(
+                sbas_pairs,
+                desc="Submitting InSAR jobs",
+                unit="pair",
+                disable=not self.logger.isEnabledFor(logging.INFO),
+            ):
+                jobs += self.hyp3.submit_insar_job(
+                    reference,
+                    secondary,
+                    name=project_name,
+                    # Compatibility with MintPy
+                    include_dem=True,
+                    include_look_vectors=True,
+                    **kwargs,
+                )
+        except Exception as e:
+            self.logger.error("Error submitting jobs: %s", e)
+
+        self.logger.info("Watching job progress...")
         jobs = self.hyp3.watch(jobs)
-        jobs.download_files(location)
+        self.logger.info("Downloading files to %s", output_dir)
+        jobs.download_files(output_dir)
