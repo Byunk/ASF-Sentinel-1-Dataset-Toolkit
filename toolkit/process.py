@@ -35,10 +35,22 @@ class InSARProcessor:
         max_temporal_baseline: int = 24,
         project_name: str | None = None,
         output_dir: Path | str = ".",
+        dry_run: bool = False,
         **kwargs,
     ) -> None:
         """
         Submit a batch of InSAR jobs with temporal baselines
+
+        Args:
+            stack: a pandas DataFrame of the stack
+            max_temporal_baseline: the maximum temporal baseline
+            project_name: the name of the project
+            output_dir: the directory to save the results
+            dry_run: whether to dry run the job submission
+            **kwargs: additional arguments to pass to the hyp3.submit_insar_job method
+
+        Returns:
+            None
         """
         sbas_pairs = set()
 
@@ -54,6 +66,9 @@ class InSARProcessor:
                 sbas_pairs.add((reference, secondary))
 
         self.logger.info("Submitting %d pairs", len(sbas_pairs))
+        if dry_run:
+            self.logger.info("Dry run, not submitting jobs")
+            return
 
         jobs = Batch()
 

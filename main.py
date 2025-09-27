@@ -15,6 +15,7 @@ def main(
     end_date: str | None = None,
     project_name: str | None = None,
     output_dir: str = "data",
+    dry_run: bool = False,
 ):
     stack = baseline_search(reference_id, start_date=start_date, end_date=end_date)
 
@@ -28,6 +29,7 @@ def main(
         include_los_displacement=True,
         include_displacement_maps=True,
         apply_water_mask=True,
+        dry_run=dry_run,
     )
 
 
@@ -40,9 +42,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--start", type=str)
     parser.add_argument("--end", type=str)
-    parser.add_argument("--project_name", type=str, help="Optional project name")
+    parser.add_argument("--project-name", type=str, help="Optional project name")
     parser.add_argument(
-        "--output_dir", type=str, help="Output directory", default="data"
+        "--output-dir", type=str, help="Output directory", default="data"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
     )
     return parser.parse_args()
 
@@ -57,4 +64,5 @@ if __name__ == "__main__":
         end_date=getattr(args, "end", None),
         project_name=getattr(args, "project_name", None),
         output_dir=getattr(args, "output_dir", "data"),
+        dry_run=getattr(args, "dry_run", False),
     )
