@@ -8,7 +8,8 @@ References:
 import logging
 import os
 from pathlib import Path
-from hyp3_sdk import HyP3, Batch
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from hyp3_sdk import HyP3, Batch, Job
 import pandas as pd
 from tqdm import tqdm
 
@@ -84,11 +85,11 @@ class InSARProcessor:
 
         sbas_pairs_list = list(sbas_pairs)
         for i in range(0, len(sbas_pairs_list), batch_size):
-            batch_pairs = sbas_pairs_list[i:i+batch_size]
+            batch_pairs = sbas_pairs_list[i : i + batch_size]
             batch_jobs = Batch()
             for reference, secondary in tqdm(
                 batch_pairs,
-                desc=f"Submitting InSAR jobs [{i+1}-{min(i+batch_size, len(sbas_pairs_list))}]",
+                desc=f"Submitting InSAR jobs [{i + 1}-{min(i + batch_size, len(sbas_pairs_list))}]",
                 unit="pair",
                 disable=not self.logger.isEnabledFor(logging.INFO),
             ):
@@ -103,7 +104,12 @@ class InSARProcessor:
                         **kwargs,
                     )
                 except Exception as e:
-                    self.logger.error("Error submitting job for pair (%s, %s): %s", reference, secondary, e)
+                    self.logger.error(
+                        "Error submitting job for pair (%s, %s): %s",
+                        reference,
+                        secondary,
+                        e,
+                    )
                     continue
 
             if len(batch_jobs) == 0:
@@ -118,5 +124,110 @@ class InSARProcessor:
                     self.logger.info("Downloading files to %s", output_dir)
                     jobs.download_files(output_dir)
             except Exception as e:
-                self.logger.error("Error processing batch [%d-%d]: %s", i+1, min(i+batch_size, len(sbas_pairs_list)), e)
+                self.logger.error(
+                    "Error processing batch [%d-%d]: %s",
+                    i + 1,
+                    min(i + batch_size, len(sbas_pairs_list)),
+                    e,
+                )
                 continue
+
+    def find_jobs(self, project_name: str) -> Batch:
+        """
+        Find jobs by project name
+        """
+        return self.hyp3.find_jobs(name=project_name)
+
+    def download_jobs(
+        self,
+        jobs: Batch | list[Job],
+        output_dir: Path | str = ".",
+        max_workers: int = 10,
+    ) -> None:
+        """
+        Download jobs to the output directory using multi-threading
+
+        Args:
+            jobs: Batch of jobs to download
+            output_dir: Directory to save the downloaded files
+            max_workers: Maximum number of concurrent download threads (default: 10)
+        """
+
+        def download_single_job(job) -> tuple[Job, Exception | None]:
+            try:
+                job.download_files(output_dir)
+                return job, None
+            except Exception as e:
+                self.logger.error(f"Failed to download job {job.job_id}: {e}")
+                return job, e
+
+        job_list = list(jobs) if not isinstance(jobs, list) else jobs
+
+        if not job_list:
+            self.logger.warning("No jobs to download")
+            return
+
+        failed_downloads = []
+        successful_downloads = 0
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_job = {
+                executor.submit(download_single_job, job): job for job in job_list
+            }
+
+            with tqdm(total=len(job_list), desc="Downloading jobs", unit="job") as pbar:
+                for future in as_completed(future_to_job):
+                    job, error = future.result()
+
+                    if error:
+                        failed_downloads.append((job, error))
+                    else:
+                        successful_downloads += 1
+
+                    pbar.update(1)
+                    pbar.set_postfix(
+                        {
+                            "Success": successful_downloads,
+                            "Failed": len(failed_downloads),
+                        }
+                    )
+
+        self.logger.info(
+            f"Download complete: {successful_downloads} successful, {len(failed_downloads)} failed"
+        )
+
+
+def download(
+    project_name: str,
+    output_dir: Path | str = ".",
+    max_workers: int = 10,
+    start_index: int = 0,
+    end_index: int = None,
+) -> None:
+    """
+    Download jobs from the project
+    """
+    processor = InSARProcessor()
+    jobs = processor.find_jobs(project_name)
+    jobs = sorted(list(jobs), key=lambda x: x.files[0]["filename"])
+    jobs = jobs[start_index:end_index]
+    processor.download_jobs(jobs, output_dir, max_workers)
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project-name", type=str, required=True)
+    parser.add_argument("--output-dir", type=str, default=".")
+    parser.add_argument("--max-workers", type=int, default=10)
+    parser.add_argument("--start-index", type=int, default=0)
+    parser.add_argument("--end-index", type=int, default=None)
+    args = parser.parse_args()
+    download(
+        args.project_name,
+        args.output_dir,
+        args.max_workers,
+        args.start_index,
+        args.end_index,
+    )
