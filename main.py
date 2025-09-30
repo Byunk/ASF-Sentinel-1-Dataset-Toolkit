@@ -17,6 +17,7 @@ def main(
     output_dir: str = "data",
     no_download: bool = False,
     dry_run: bool = False,
+    water_mask: bool = False,
 ):
     stack = baseline_search(reference_id, start_date=start_date, end_date=end_date)
 
@@ -29,7 +30,7 @@ def main(
         include_wrapped_phase=True,
         include_los_displacement=True,
         include_displacement_maps=True,
-        apply_water_mask=True,
+        apply_water_mask=water_mask,
         download=not no_download,
         dry_run=dry_run,
     )
@@ -58,6 +59,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--water-mask",
+        action="store_true",
+        default=False,
+        help="Apply water mask to the processing (default: False)",
+    )
     return parser.parse_args()
 
 
@@ -73,4 +80,5 @@ if __name__ == "__main__":
         output_dir=getattr(args, "output_dir", "data"),
         no_download=not getattr(args, "no_download", False),
         dry_run=getattr(args, "dry_run", False),
+        water_mask=getattr(args, "water_mask", False),
     )
