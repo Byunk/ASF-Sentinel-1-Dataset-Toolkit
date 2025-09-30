@@ -11,6 +11,7 @@ wheels/
 
 # Data
 data/
+results/
 .env
 *.h5
 *.json

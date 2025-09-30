@@ -59,11 +59,11 @@ Process the InSAR stack with MintPy to generate timeseries and velocity:
 > **NOTE**: You need to enable CDS Access to download ERA5 data. See this notebook for details: [CDS Access](https://github.com/ASFOpenSARlab/opensarlab_MintPy_Recipe_Book/blob/main/2_CDS_Access.ipynb)
 
 ```bash
-# Run MintPy smallbaselineApp
+# Run MintPy smallbaselineApp with output to results/seoul-insar/ directory
 docker run --rm --platform linux/amd64 \
   -v $PWD:/home/mambauser \
   ghcr.io/insarlab/mintpy:latest \
-  smallbaselineApp.py mintpy/seoul-insar.txt
+  smallbaselineApp.py mintpy/seoul-insar.txt --dir results/seoul-insar
 ```
 
 **Configuration**: Edit `smallbaselineApp.cfg` before running:
@@ -71,10 +71,11 @@ docker run --rm --platform linux/amd64 \
 - Configure input file paths to point to your clipped GeoTIFF files
 - Adjust processing parameters as needed
 
-**Output files**:
+**Output files** (in `results/seoul-insar/` directory):
 - `timeseries.h5` - Displacement timeseries for each date
 - `velocity.h5` - Mean velocity map (cm/year)
 - `temporalCoherence.h5` - Quality metrics
+- `pic/` - Generated plots and figures
 - Other intermediate products
 
 ### Step 4: Visualize Results
@@ -83,13 +84,13 @@ Visualize displacement and velocity with geographic coordinates:
 
 ```bash
 # Interactive timeseries viewer
-uv run toolkit/visualization.py timeseries.h5 --interactive
+uv run toolkit/visualization.py results/seoul-insar/timeseries.h5 --interactive
 
 # Plot specific date
-uv run toolkit/visualization.py timeseries.h5 --date-idx 44 --output displacement.png
+uv run toolkit/visualization.py results/seoul-insar/timeseries.h5 --date-idx 44 --output displacement.png
 
 # Plot velocity map
-uv run toolkit/visualization.py velocity.h5 --output velocity.png
+uv run toolkit/visualization.py results/seoul-insar/velocity.h5 --output velocity.png
 ```
 
 See [InSAR Visualization](#insar-visualization) section below for more options.
@@ -105,16 +106,16 @@ Visualize InSAR timeseries and velocity data with geographic coordinates (lat/lo
 uv run toolkit/visualization.py --help
 
 # Plot timeseries at specific date
-uv run toolkit/visualization.py timeseries.h5 --date-idx 44
+uv run toolkit/visualization.py results/seoul-insar/timeseries.h5 --date-idx 44
 
 # Interactive timeseries viewer with slider
-uv run toolkit/visualization.py timeseries.h5 --interactive
+uv run toolkit/visualization.py results/seoul-insar/timeseries.h5 --interactive
 
 # Plot velocity map
-uv run toolkit/visualization.py velocity.h5
+uv run toolkit/visualization.py results/seoul-insar/velocity.h5
 
 # Save to file
-uv run toolkit/visualization.py timeseries.h5 --output displacement.png
+uv run toolkit/visualization.py results/seoul-insar/timeseries.h5 --output displacement.png
 ```
 
 
@@ -122,16 +123,16 @@ uv run toolkit/visualization.py timeseries.h5 --output displacement.png
 
 ```bash
 # Plot displacement at date index 44 and save
-uv run toolkit/visualization.py timeseries.h5 --date-idx 44 --output displacement_44.png
+uv run toolkit/visualization.py results/seoul-insar/timeseries.h5 --date-idx 44 --output displacement_44.png
 
 # Interactive viewer for exploring timeseries
-uv run toolkit/visualization.py timeseries.h5 -i
+uv run toolkit/visualization.py results/seoul-insar/timeseries.h5 -i
 
 # Plot velocity with custom color scale
-uv run toolkit/visualization.py velocity.h5 --vmin -5 --vmax 5 --cmap jet -o velocity_map.png
+uv run toolkit/visualization.py results/seoul-insar/velocity.h5 --vmin -5 --vmax 5 --cmap jet -o velocity_map.png
 
 # Custom title
-uv run toolkit/visualization.py timeseries.h5 --title "Seoul Displacement Analysis"
+uv run toolkit/visualization.py results/seoul-insar/timeseries.h5 --title "Seoul Displacement Analysis"
 ```
 
 ### Features
