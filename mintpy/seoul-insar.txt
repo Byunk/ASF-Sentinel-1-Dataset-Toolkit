@@ -1,0 +1,10 @@
+mintpy.load.processor        = hyp3
+##---------interferogram datasets
+mintpy.load.unwFile          = data/seoul-insar/*/*_unw_phase_clipped.tif
+mintpy.load.corFile          = data/seoul-insar/*/*_corr_clipped.tif
+##---------geometry datasets:
+mintpy.load.demFile          = data/seoul-insar/*/*_dem_clipped.tif
+mintpy.load.incAngleFile     = data/seoul-insar/*/*_lv_theta_clipped.tif
+mintpy.load.azAngleFile      = data/seoul-insar/*/*_lv_phi_clipped.tif
+mintpy.load.waterMaskFile    = data/seoul-insar/*/*_water_mask_clipped.tif
+# mintpy.troposphericDelay.method = no

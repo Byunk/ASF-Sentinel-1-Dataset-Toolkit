@@ -12,3 +12,10 @@ wheels/
 # Data
 data/
 .env
+*.h5
+*.json
+*.cfg
+*.txt
+ERA5/
+pic/
+.cdsapirc
