@@ -15,7 +15,7 @@ def main(
     end_date: str | None = None,
     project_name: str | None = None,
     output_dir: str = "data",
-    no_download: bool = False,
+    download: bool = True,
     dry_run: bool = False,
     water_mask: bool = False,
 ):
@@ -31,7 +31,7 @@ def main(
         include_los_displacement=True,
         include_displacement_maps=True,
         apply_water_mask=water_mask,
-        download=not no_download,
+        download=download,
         dry_run=dry_run,
     )
 
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         end_date=getattr(args, "end", None),
         project_name=getattr(args, "project_name", None),
         output_dir=getattr(args, "output_dir", "data"),
-        no_download=not getattr(args, "no_download", False),
+        download=not getattr(args, "no_download", False),
         dry_run=getattr(args, "dry_run", False),
         water_mask=getattr(args, "water_mask", False),
     )
