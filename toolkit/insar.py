@@ -1,11 +1,57 @@
-"""
-Visualization tools for InSAR timeseries data with geographic coordinates.
-"""
-
+from pathlib import Path
+from osgeo import gdal
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 from pyproj import Transformer
+
+
+def get_common_overlap(files: list[str | Path]) -> list[float]:
+    """Get the common overlap of  a list of GeoTIFF files
+
+    Args:
+        files: a list of GeoTIFF files
+
+    Returns:
+        [ulx, uly, lrx, lry], the upper-left x, upper-left y, lower-right x, and lower-right y
+        corner coordinates of the common overlap
+    """
+
+    corners = [gdal.Info(str(dem), format="json")["cornerCoordinates"] for dem in files]
+
+    ulx = max(corner["upperLeft"][0] for corner in corners)
+    uly = min(corner["upperLeft"][1] for corner in corners)
+    lrx = min(corner["lowerRight"][0] for corner in corners)
+    lry = max(corner["lowerRight"][1] for corner in corners)
+    return [ulx, uly, lrx, lry]
+
+
+def clip_hyp3_products_to_common_overlap(
+    data_dir: str | Path, overlap: list[float]
+) -> None:
+    """Clip all GeoTIFF files to their common overlap
+
+    Args:
+        data_dir:
+            directory containing the GeoTIFF files to clip
+        overlap:
+            a list of the upper-left x, upper-left y, lower-right-x, and lower-tight y
+            corner coordinates of the common overlap
+    Returns: None
+    """
+    files_for_mintpy = [
+        "_water_mask.tif",
+        "_corr.tif",
+        "_unw_phase.tif",
+        "_dem.tif",
+        "_lv_theta.tif",
+        "_lv_phi.tif",
+    ]
+
+    for extension in files_for_mintpy:
+        for file in data_dir.rglob(f"*{extension}"):
+            dst_file = file.parent / f"{file.stem}_clipped{file.suffix}"
+            gdal.Translate(destName=str(dst_file), srcDS=str(file), projWin=overlap)
 
 
 def read_timeseries_metadata(timeseries_file):
@@ -51,9 +97,6 @@ def plot_timeseries_geographic(
     timeseries_file,
     date_idx=None,
     figsize=(12, 10),
-    cmap="RdYlBu_r",
-    vmin=None,
-    vmax=None,
     show_colorbar=True,
     title=None,
     save_path=None,
@@ -65,8 +108,6 @@ def plot_timeseries_geographic(
         timeseries_file: Path to timeseries.h5 file
         date_idx: Index of date to plot (default: last date)
         figsize: Figure size (width, height)
-        cmap: Colormap name
-        vmin, vmax: Color scale limits in cm
         show_colorbar: Whether to show colorbar
         title: Custom title (auto-generated if None)
         save_path: Path to save figure (None to just display)
@@ -98,13 +139,11 @@ def plot_timeseries_geographic(
     fig, ax = plt.subplots(1, 1, figsize=figsize)
 
     # Plot with lon/lat coordinates
-    if vmin is None:
-        vmin = np.percentile(displacement_cm[~displacement_cm.mask], 2)
-    if vmax is None:
-        vmax = np.percentile(displacement_cm[~displacement_cm.mask], 98)
+    vmin = np.percentile(displacement_cm[~displacement_cm.mask], 2)
+    vmax = np.percentile(displacement_cm[~displacement_cm.mask], 98)
 
     im = ax.pcolormesh(
-        lon, lat, displacement_cm, cmap=cmap, vmin=vmin, vmax=vmax, shading="auto"
+        lon, lat, displacement_cm, cmap="RdYlBu_r", vmin=vmin, vmax=vmax, shading="auto"
     )
 
     # Add reference point
@@ -176,9 +215,6 @@ def plot_timeseries_geographic(
 def plot_velocity_geographic(
     velocity_file,
     figsize=(12, 10),
-    cmap="RdYlBu_r",
-    vmin=None,
-    vmax=None,
     title="Mean LOS Velocity",
     save_path=None,
 ):
@@ -188,8 +224,6 @@ def plot_velocity_geographic(
     Parameters:
         velocity_file: Path to velocity.h5 file
         figsize: Figure size (width, height)
-        cmap: Colormap name
-        vmin, vmax: Velocity limits in cm/year
         title: Plot title
         save_path: Path to save figure
     """
@@ -210,14 +244,13 @@ def plot_velocity_geographic(
     # Create figure
     fig, ax = plt.subplots(1, 1, figsize=figsize)
 
-    # Auto-scale if not provided
-    if vmin is None or vmax is None:
-        vmax_abs = np.percentile(np.abs(velocity_cm[~velocity_cm.mask]), 98)
-        vmin = -vmax_abs
-        vmax = vmax_abs
+    # Auto-scale
+    vmax_abs = np.percentile(np.abs(velocity_cm[~velocity_cm.mask]), 98)
+    vmin = -vmax_abs
+    vmax = vmax_abs
 
     im = ax.pcolormesh(
-        lon, lat, velocity_cm, cmap=cmap, vmin=vmin, vmax=vmax, shading="auto"
+        lon, lat, velocity_cm, cmap="RdYlBu_r", vmin=vmin, vmax=vmax, shading="auto"
     )
 
     # Add reference point
@@ -366,108 +399,3 @@ def interactive_timeseries_viewer(timeseries_file):
     slider.on_changed(update)
 
     plt.show()
-
-
-if __name__ == "__main__":
-    import argparse
-    import os
-
-    parser = argparse.ArgumentParser(
-        description="Visualize InSAR timeseries and velocity data with geographic coordinates",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Plot timeseries at specific date
-  %(prog)s results/seoul-insar/timeseries.h5 --date-idx 44 --output displacement.png
-
-  # Interactive timeseries viewer with slider
-  %(prog)s results/seoul-insar/timeseries.h5 --interactive
-
-  # Plot velocity map
-  %(prog)s results/seoul-insar/velocity.h5 --output velocity.png
-
-  # Custom color scale
-  %(prog)s results/seoul-insar/velocity.h5 --vmin -5 --vmax 5 --cmap jet
-        """,
-    )
-
-    parser.add_argument("input", help="Input HDF5 file (timeseries.h5 or velocity.h5)")
-    parser.add_argument(
-        "--date-idx",
-        type=int,
-        default=None,
-        help="Date index to plot (default: last date). Only for timeseries files.",
-    )
-    parser.add_argument(
-        "--interactive",
-        "-i",
-        action="store_true",
-        help="Launch interactive viewer with slider. Only for timeseries files.",
-    )
-    parser.add_argument(
-        "--output",
-        "-o",
-        type=str,
-        default=None,
-        help="Output file path to save the figure (e.g., output.png)",
-    )
-    parser.add_argument(
-        "--cmap", type=str, default="RdYlBu_r", help="Colormap name (default: RdYlBu_r)"
-    )
-    parser.add_argument(
-        "--vmin",
-        type=float,
-        default=None,
-        help="Minimum value for color scale (cm for timeseries, cm/year for velocity)",
-    )
-    parser.add_argument(
-        "--vmax",
-        type=float,
-        default=None,
-        help="Maximum value for color scale (cm for timeseries, cm/year for velocity)",
-    )
-    parser.add_argument("--title", type=str, default=None, help="Custom plot title")
-
-    args = parser.parse_args()
-
-    # Check if input file exists
-    if not os.path.exists(args.input):
-        print(f"Error: Input file '{args.input}' not found.")
-        exit(1)
-
-    # Determine file type
-    is_velocity = "velocity" in args.input.lower()
-
-    if is_velocity:
-        # Plot velocity
-        if args.interactive:
-            print(
-                "Warning: --interactive mode is only supported for timeseries files. Ignoring."
-            )
-
-        plot_velocity_geographic(
-            args.input,
-            cmap=args.cmap,
-            vmin=args.vmin,
-            vmax=args.vmax,
-            title=args.title or "Mean LOS Velocity",
-            save_path=args.output,
-        )
-    else:
-        # Plot timeseries
-        if args.interactive:
-            if args.output:
-                print(
-                    "Warning: --output is not supported in interactive mode. Ignoring."
-                )
-            interactive_timeseries_viewer(args.input)
-        else:
-            plot_timeseries_geographic(
-                args.input,
-                date_idx=args.date_idx,
-                cmap=args.cmap,
-                vmin=args.vmin,
-                vmax=args.vmax,
-                title=args.title,
-                save_path=args.output,
-            )
