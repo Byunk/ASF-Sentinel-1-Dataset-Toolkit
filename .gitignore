@@ -17,6 +17,7 @@ results/
 *.json
 *.cfg
 *.txt
+!mintpy/*.txt
 ERA5/
 pic/
 .cdsapirc
