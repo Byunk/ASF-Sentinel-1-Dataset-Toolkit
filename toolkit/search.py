@@ -168,28 +168,3 @@ def sbas_pairs(
     pairs = list(sbas_pairs)
     pairs.sort(key=lambda x: x[0])
     return pairs
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
-
-    with open("input.txt", "r") as f:
-        ids = f.readlines()
-    ids = [id.strip() for id in ids]
-
-    results = stack_from_ids(ids)
-    pairs = sbas_pairs(results, min_temporal_baseline=81, max_temporal_baseline=99)
-
-    # Save the results to a file
-    with open("stack_data.txt", "w") as f:
-        for item in results.itertuples():
-            scene_name = item.sceneName
-            start_time = item.startTime
-            f.write(f"{scene_name},{start_time}\n")
-
-    with open("sbas_pairs.txt", "w") as f:
-        for pair in pairs:
-            f.write(f"{pair[0]},{pair[1]}\n")
-
-    logger.info("%d items saved to stack_data.txt", len(results))
-    logger.info("%d pairs saved to sbas_pairs.txt", len(pairs))
