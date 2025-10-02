@@ -27,6 +27,7 @@ class HyP3Client:
         download: bool = True,
         looks: Literal["10x2", "20x4"] = "10x2",
         water_mask: bool = False,
+        wait: bool = True,
     ) -> None:
         """
         Submit an InSAR job
@@ -59,10 +60,18 @@ class HyP3Client:
                 include_look_vectors=True,
             )
 
-        batch = self.hyp3.watch(batch)
-        if download:
-            self.logger.info("Downloading files to %s", output_dir)
-            batch.download_files(output_dir)
+        if wait:
+            batch = self.hyp3.watch(batch)
+            if download:
+                self.logger.info("Downloading files to %s", output_dir)
+                batch.download_files(output_dir)
+        else:
+            self.logger.info("Jobs submitted. Not waiting for completion.")
+            if download:
+                self.logger.warning(
+                    "Download skipped because --no-wait was specified. "
+                    "Use 'download' command later to retrieve results."
+                )
 
     def submit_insar_burst_job(
         self,
@@ -72,6 +81,7 @@ class HyP3Client:
         download: bool = True,
         looks: Literal["20x4", "10x2", "5x1"] = "5x1",
         water_mask: bool = False,
+        wait: bool = True,
     ) -> None:
         """
         Submit an InSAR burst job
@@ -98,10 +108,18 @@ class HyP3Client:
                 apply_water_mask=water_mask,
             )
 
-        batch = self.hyp3.watch(batch)
-        if download:
-            self.logger.info("Downloading files to %s", output_dir)
-            batch.download_files(output_dir)
+        if wait:
+            batch = self.hyp3.watch(batch)
+            if download:
+                self.logger.info("Downloading files to %s", output_dir)
+                batch.download_files(output_dir)
+        else:
+            self.logger.info("Jobs submitted. Not waiting for completion.")
+            if download:
+                self.logger.warning(
+                    "Download skipped because --no-wait was specified. "
+                    "Use 'download' command later to retrieve results."
+                )
 
     def find_jobs(self, project_name: str) -> Batch:
         """

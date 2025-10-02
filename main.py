@@ -27,6 +27,7 @@ def process_insar_command(
     min_temporal_baseline: int = 0,
     max_temporal_baseline: int = 24,
     dry_run: bool = False,
+    wait: bool = True,
 ):
     username = os.getenv("HYP3_USERNAME")
     password = os.getenv("HYP3_PASSWORD")
@@ -67,6 +68,7 @@ def process_insar_command(
         download=download,
         looks=looks,
         water_mask=water_mask,
+        wait=wait,
     )
 
 
@@ -80,6 +82,7 @@ def process_insar_burst_command(
     min_temporal_baseline: int = 0,
     max_temporal_baseline: int = 24,
     dry_run: bool = False,
+    wait: bool = True,
 ):
     username = os.getenv("HYP3_USERNAME")
     password = os.getenv("HYP3_PASSWORD")
@@ -120,6 +123,7 @@ def process_insar_burst_command(
         download=download,
         looks=looks,
         water_mask=water_mask,
+        wait=wait,
     )
 
 
@@ -252,6 +256,12 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Show pairs that would be processed without submitting jobs",
     )
+    insar_parser.add_argument(
+        "--no-wait",
+        action="store_true",
+        default=False,
+        help="Submit jobs without waiting for completion",
+    )
 
     # Process InSAR Burst subcommand
     insar_burst_parser = process_subparsers.add_parser(
@@ -307,6 +317,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         default=False,
         help="Show pairs that would be processed without submitting jobs",
+    )
+    insar_burst_parser.add_argument(
+        "--no-wait",
+        action="store_true",
+        default=False,
+        help="Submit jobs without waiting for completion",
     )
 
     # Download subcommand
@@ -375,6 +391,7 @@ if __name__ == "__main__":
                 min_temporal_baseline=getattr(args, "min_temporal_baseline", 0),
                 max_temporal_baseline=getattr(args, "max_temporal_baseline", 24),
                 dry_run=getattr(args, "dry_run", False),
+                wait=not getattr(args, "no_wait", False),
             )
         elif args.process_type == "insar-burst":
             process_insar_burst_command(
@@ -387,6 +404,7 @@ if __name__ == "__main__":
                 min_temporal_baseline=getattr(args, "min_temporal_baseline", 0),
                 max_temporal_baseline=getattr(args, "max_temporal_baseline", 24),
                 dry_run=getattr(args, "dry_run", False),
+                wait=not getattr(args, "no_wait", False),
             )
         else:
             logger.error(

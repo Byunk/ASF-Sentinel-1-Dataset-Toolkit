@@ -53,6 +53,7 @@ This is the complete workflow from raw data to visualization:
    - `--project-name`: HyP3 project name
    - `--output-dir`: Output directory (default: data)
    - `--no-download`: Skip auto-download after processing
+   - `--no-wait`: Submit jobs without waiting for completion (useful for large batches)
    - `--water-mask`: Apply water mask
    - `--looks`: Resolution (insar: 10x2|20x4, insar-burst: 5x1|10x2|20x4)
    - `--min-temporal-baseline`: Minimum temporal baseline in days (default: 0)
