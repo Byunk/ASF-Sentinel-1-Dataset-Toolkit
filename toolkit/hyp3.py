@@ -5,6 +5,7 @@ Comprehensive InSAR processing toolkit
 import logging
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Literal
 from hyp3_sdk import HyP3, Batch, Job
 from tqdm import tqdm
 
@@ -17,6 +18,90 @@ class HyP3Client:
     def __init__(self, username: str, password: str):
         self.hyp3 = HyP3(username=username, password=password)
         self.logger = logging.getLogger(__name__)
+
+    def submit_insar_job(
+        self,
+        pairs: list[tuple[str, str]],
+        project_name: str | None = None,
+        output_dir: Path | str = ".",
+        download: bool = True,
+        looks: Literal["10x2", "20x4"] = "10x2",
+        water_mask: bool = False,
+    ) -> None:
+        """
+        Submit an InSAR job
+        """
+        if not pairs:
+            self.logger.warning("No pairs to submit")
+            return
+
+        # Check if there are enough credits to submit jobs
+        cost_per_pair = 15 if looks == "10x2" else 10
+        total_cost = len(pairs) * cost_per_pair
+        credits = self.hyp3.check_credits()
+        if total_cost > credits:
+            self.logger.error("Not enough credits to submit jobs")
+            return
+
+        batch = Batch()
+        for reference, secondary in pairs:
+            batch += self.hyp3.submit_insar_job(
+                reference,
+                secondary,
+                name=project_name,
+                include_inc_map=True,
+                looks=looks,
+                apply_water_mask=water_mask,
+                include_wrapped_phase=True,
+                include_displacement_maps=True,
+                # Compatibility with MintPy
+                include_dem=True,
+                include_look_vectors=True,
+            )
+
+        batch = self.hyp3.watch(batch)
+        if download:
+            self.logger.info("Downloading files to %s", output_dir)
+            batch.download_files(output_dir)
+
+    def submit_insar_burst_job(
+        self,
+        pairs: list[tuple[str, str]],
+        project_name: str | None = None,
+        output_dir: Path | str = ".",
+        download: bool = True,
+        looks: Literal["20x4", "10x2", "5x1"] = "5x1",
+        water_mask: bool = False,
+    ) -> None:
+        """
+        Submit an InSAR burst job
+        """
+        if not pairs:
+            self.logger.warning("No pairs to submit")
+            return
+
+        # Check if there are enough credits to submit jobs
+        cost_per_pair = 1
+        total_cost = len(pairs) * cost_per_pair
+        credits = self.hyp3.check_credits()
+        if total_cost > credits:
+            self.logger.error("Not enough credits to submit jobs")
+            return
+
+        batch = Batch()
+        for reference, secondary in pairs:
+            batch += self.hyp3.submit_insar_isce_burst_job(
+                reference,
+                secondary,
+                name=project_name,
+                looks=looks,
+                apply_water_mask=water_mask,
+            )
+
+        batch = self.hyp3.watch(batch)
+        if download:
+            self.logger.info("Downloading files to %s", output_dir)
+            batch.download_files(output_dir)
 
     def find_jobs(self, project_name: str) -> Batch:
         """

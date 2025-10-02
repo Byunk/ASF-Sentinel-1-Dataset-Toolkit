@@ -10,38 +10,116 @@ from toolkit.insar import (
     interactive_timeseries_viewer,
     plot_velocity_geographic,
 )
-from toolkit.process import InSARProcessor
-from toolkit.search import baseline_search
+from toolkit.search import read_ids_from_file, sbas_pairs, stack_from_ids
 
 logger = logging.getLogger(__name__)
 asf_logger = logging.getLogger("asf_search")
 asf_logger.setLevel(logging.WARNING)
 
 
-def process_command(
-    reference_id: str,
-    start_date: str | None = None,
-    end_date: str | None = None,
+def process_insar_command(
+    input_file: str,
     project_name: str | None = None,
     output_dir: str = "data",
     download: bool = True,
-    dry_run: bool = False,
     water_mask: bool = False,
+    looks: str = "10x2",
+    min_temporal_baseline: int = 0,
+    max_temporal_baseline: int = 24,
+    dry_run: bool = False,
 ):
-    stack = baseline_search(reference_id, start_date=start_date, end_date=end_date)
+    username = os.getenv("HYP3_USERNAME")
+    password = os.getenv("HYP3_PASSWORD")
 
-    processor = InSARProcessor()
-    processor.submit_with_temporal_baselines(
-        stack,
+    if not username or not password:
+        logger.error("HYP3_USERNAME and HYP3_PASSWORD environment variables required")
+        return
+
+    ids = read_ids_from_file(input_file)
+    if not ids:
+        logger.error("No IDs found in input file")
+        return
+
+    logger.info(f"Generating stack from {len(ids)} IDs")
+    stack = stack_from_ids(ids)
+
+    logger.info(
+        f"Generating SBAS pairs (temporal baseline: {min_temporal_baseline}-{max_temporal_baseline} days)"
+    )
+    pairs = sbas_pairs(stack, min_temporal_baseline, max_temporal_baseline)
+    logger.info(f"Generated {len(pairs)} pairs")
+
+    if not pairs:
+        logger.error("No pairs generated")
+        return
+
+    if dry_run:
+        logger.info(f"DRY RUN: Would process {len(pairs)} pairs:")
+        for reference, secondary in pairs:
+            print(f"{reference},{secondary}")
+        return
+
+    client = HyP3Client(username=username, password=password)
+    client.submit_insar_job(
+        pairs=pairs,
         project_name=project_name,
         output_dir=output_dir,
-        looks="10x2",  # Better resolution than 20x4
-        include_wrapped_phase=True,
-        include_los_displacement=True,
-        include_displacement_maps=True,
-        apply_water_mask=water_mask,
         download=download,
-        dry_run=dry_run,
+        looks=looks,
+        water_mask=water_mask,
+    )
+
+
+def process_insar_burst_command(
+    input_file: str,
+    project_name: str | None = None,
+    output_dir: str = "data",
+    download: bool = True,
+    water_mask: bool = False,
+    looks: str = "5x1",
+    min_temporal_baseline: int = 0,
+    max_temporal_baseline: int = 24,
+    dry_run: bool = False,
+):
+    username = os.getenv("HYP3_USERNAME")
+    password = os.getenv("HYP3_PASSWORD")
+
+    if not username or not password:
+        logger.error("HYP3_USERNAME and HYP3_PASSWORD environment variables required")
+        return
+
+    ids = read_ids_from_file(input_file)
+    if not ids:
+        logger.error("No IDs found in input file")
+        return
+
+    logger.info(f"Generating stack from {len(ids)} IDs")
+    stack = stack_from_ids(ids)
+
+    logger.info(
+        f"Generating SBAS pairs (temporal baseline: {min_temporal_baseline}-{max_temporal_baseline} days)"
+    )
+    pairs = sbas_pairs(stack, min_temporal_baseline, max_temporal_baseline)
+    logger.info(f"Generated {len(pairs)} pairs")
+
+    if not pairs:
+        logger.error("No pairs generated")
+        return
+
+    if dry_run:
+        logger.info(f"DRY RUN: Would process {len(pairs)} pairs:")
+        for reference, secondary in pairs:
+            print(f"{reference},{secondary}")
+        return
+
+    client = HyP3Client(username=username, password=password)
+    client.submit_insar_burst_job(
+        pairs=pairs,
+        project_name=project_name,
+        output_dir=output_dir,
+        download=download,
+        looks=looks,
+        water_mask=water_mask,
     )
 
 
@@ -117,40 +195,118 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="ASF Sentinel-1 InSAR Toolkit")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Process subcommand
-    process_parser = subparsers.add_parser(
-        "process", help="Search and process InSAR pairs"
+    # Process subcommand with nested subcommands
+    process_parser = subparsers.add_parser("process", help="Process InSAR jobs")
+    process_subparsers = process_parser.add_subparsers(
+        dest="process_type", help="Processing type"
     )
-    process_parser.add_argument(
-        "reference_id",
+
+    # Process InSAR subcommand
+    insar_parser = process_subparsers.add_parser("insar", help="Process InSAR pairs")
+    insar_parser.add_argument(
+        "input_file",
         type=str,
-        help="Reference product ID (e.g. S1A_IW_SLC__1SSV_20141213T093112_20141213T093140_003699_004641_E1DC-SLC)",
+        help="Text file containing product IDs (one per line)",
     )
-    process_parser.add_argument("--start", type=str, help="Start date")
-    process_parser.add_argument("--end", type=str, help="End date")
-    process_parser.add_argument(
-        "--project-name", type=str, help="Optional project name"
+    insar_parser.add_argument("--project-name", type=str, help="HyP3 project name")
+    insar_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="data",
+        help="Output directory (default: data)",
     )
-    process_parser.add_argument(
-        "--output-dir", type=str, help="Output directory", default="data"
-    )
-    process_parser.add_argument(
+    insar_parser.add_argument(
         "--no-download",
         action="store_true",
         default=False,
         help="Skip downloading processed results",
     )
-    process_parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Dry run without submitting jobs",
-    )
-    process_parser.add_argument(
+    insar_parser.add_argument(
         "--water-mask",
         action="store_true",
         default=False,
-        help="Apply water mask to the processing (default: False)",
+        help="Apply water mask (default: False)",
+    )
+    insar_parser.add_argument(
+        "--looks",
+        type=str,
+        default="10x2",
+        choices=["10x2", "20x4"],
+        help="Resolution setting (default: 10x2)",
+    )
+    insar_parser.add_argument(
+        "--min-temporal-baseline",
+        type=int,
+        default=0,
+        help="Minimum temporal baseline in days (default: 0)",
+    )
+    insar_parser.add_argument(
+        "--max-temporal-baseline",
+        type=int,
+        default=24,
+        help="Maximum temporal baseline in days (default: 24)",
+    )
+    insar_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Show pairs that would be processed without submitting jobs",
+    )
+
+    # Process InSAR Burst subcommand
+    insar_burst_parser = process_subparsers.add_parser(
+        "insar-burst", help="Process InSAR burst pairs"
+    )
+    insar_burst_parser.add_argument(
+        "input_file",
+        type=str,
+        help="Text file containing product IDs (one per line)",
+    )
+    insar_burst_parser.add_argument(
+        "--project-name", type=str, help="HyP3 project name"
+    )
+    insar_burst_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="data",
+        help="Output directory (default: data)",
+    )
+    insar_burst_parser.add_argument(
+        "--no-download",
+        action="store_true",
+        default=False,
+        help="Skip downloading processed results",
+    )
+    insar_burst_parser.add_argument(
+        "--water-mask",
+        action="store_true",
+        default=False,
+        help="Apply water mask (default: False)",
+    )
+    insar_burst_parser.add_argument(
+        "--looks",
+        type=str,
+        default="5x1",
+        choices=["20x4", "10x2", "5x1"],
+        help="Resolution setting (default: 5x1)",
+    )
+    insar_burst_parser.add_argument(
+        "--min-temporal-baseline",
+        type=int,
+        default=0,
+        help="Minimum temporal baseline in days (default: 0)",
+    )
+    insar_burst_parser.add_argument(
+        "--max-temporal-baseline",
+        type=int,
+        default=24,
+        help="Maximum temporal baseline in days (default: 24)",
+    )
+    insar_burst_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Show pairs that would be processed without submitting jobs",
     )
 
     # Download subcommand
@@ -208,16 +364,34 @@ if __name__ == "__main__":
     args = parse_args()
 
     if args.command == "process":
-        process_command(
-            reference_id=args.reference_id,
-            start_date=getattr(args, "start", None),
-            end_date=getattr(args, "end", None),
-            project_name=getattr(args, "project_name", None),
-            output_dir=getattr(args, "output_dir", "data"),
-            download=not getattr(args, "no_download", False),
-            dry_run=getattr(args, "dry_run", False),
-            water_mask=getattr(args, "water_mask", False),
-        )
+        if args.process_type == "insar":
+            process_insar_command(
+                input_file=args.input_file,
+                project_name=getattr(args, "project_name", None),
+                output_dir=getattr(args, "output_dir", "data"),
+                download=not getattr(args, "no_download", False),
+                water_mask=getattr(args, "water_mask", False),
+                looks=getattr(args, "looks", "10x2"),
+                min_temporal_baseline=getattr(args, "min_temporal_baseline", 0),
+                max_temporal_baseline=getattr(args, "max_temporal_baseline", 24),
+                dry_run=getattr(args, "dry_run", False),
+            )
+        elif args.process_type == "insar-burst":
+            process_insar_burst_command(
+                input_file=args.input_file,
+                project_name=getattr(args, "project_name", None),
+                output_dir=getattr(args, "output_dir", "data"),
+                download=not getattr(args, "no_download", False),
+                water_mask=getattr(args, "water_mask", False),
+                looks=getattr(args, "looks", "5x1"),
+                min_temporal_baseline=getattr(args, "min_temporal_baseline", 0),
+                max_temporal_baseline=getattr(args, "max_temporal_baseline", 24),
+                dry_run=getattr(args, "dry_run", False),
+            )
+        else:
+            logger.error(
+                "No process type specified. Use 'process insar' or 'process insar-burst'."
+            )
     elif args.command == "download":
         download_command(
             project_name=args.project_name,

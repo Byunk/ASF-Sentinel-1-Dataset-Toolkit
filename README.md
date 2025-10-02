@@ -29,13 +29,36 @@ This is the complete workflow from raw data to visualization:
 
 > If you already have a processed dataset, you can skip to Step 2.
 
-### Step 1: Process InSAR Dataset
+### Step 1: Search and Process InSAR Dataset
 
-Strongly recommend using [ASF Search](https://search.asf.alaska.edu/) to search for desired SAR products. They offer geographic, baseline, and SBAS search tools to find the desired products.
+1. Use [ASF Search](https://search.asf.alaska.edu/) to search for desired SAR products using their geographic, baseline, and SBAS search tools
 
-After finding the desired products, you can use hyp3 on-demand processing on website. Once you have the products, go to Step 2 and download the products to your data directory.
+2. Export the product IDs from ASF Search to a text file (one ID per line). See `input.txt.example` for reference.
 
-> By above recommendation, `search.py` and `process.py` will be deprecated.
+3. Submit processing jobs using the CLI:
+
+   **Process InSAR pairs:**
+   ```bash
+   uv run main.py process insar input.txt --project-name my-project
+   ```
+
+   **Process InSAR burst pairs (higher resolution, lower cost):**
+   ```bash
+   uv run main.py process insar-burst input.txt --project-name my-project
+   ```
+
+   The CLI will automatically generate SBAS pairs from the input IDs based on temporal baselines.
+
+   Available options:
+   - `--project-name`: HyP3 project name
+   - `--output-dir`: Output directory (default: data)
+   - `--no-download`: Skip auto-download after processing
+   - `--water-mask`: Apply water mask
+   - `--looks`: Resolution (insar: 10x2|20x4, insar-burst: 5x1|10x2|20x4)
+   - `--min-temporal-baseline`: Minimum temporal baseline in days (default: 0)
+   - `--max-temporal-baseline`: Maximum temporal baseline in days (default: 24)
+
+Alternatively, you can process directly on the ASF HyP3 website and skip to Step 2.
 
 ### Step 2: Download InSAR Products
 
