@@ -14,7 +14,7 @@ A toolkit for the ASF Sentinel-1 dataset.
 
 - [`uv`](https://docs.astral.sh/uv/)
 - Docker (for MintPy processing)
-- [`gdal`](https://gdal.org/en/stable/download.html)
+- System dependencies: see [DEPENDENCIES.md](DEPENDENCIES.md)
 
 Sign up for `earthdata.nasa.gov` and get your credentials.
 
