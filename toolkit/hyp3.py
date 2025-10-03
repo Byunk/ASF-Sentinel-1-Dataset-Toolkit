@@ -7,6 +7,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Literal
 from hyp3_sdk import HyP3, Batch, Job
+import hyp3_sdk
 from tqdm import tqdm
 
 
@@ -142,33 +143,34 @@ class HyP3Client:
             max_workers: Maximum number of concurrent download threads (default: 10)
         """
 
-        def download_single_job(job) -> tuple[Job, Exception | None]:
+        def download_single_job(job: Job) -> bool:
             try:
-                job.download_files(output_dir)
-                return job, None
+                p = job.download_files(output_dir)
+                p = [hyp3_sdk.util.extract_zipped_product(pp) for pp in p]
+                return True
             except Exception as e:
                 self.logger.error(f"Failed to download job {job.job_id}: {e}")
-                return job, e
+                return False
 
         job_list = list(jobs) if not isinstance(jobs, list) else jobs
         if not job_list:
             self.logger.warning("No jobs to download")
             return
 
-        failed_downloads = []
+        failed_downloads = 0
         successful_downloads = 0
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_job = {
+            future_to_success = {
                 executor.submit(download_single_job, job): job for job in job_list
             }
 
             with tqdm(total=len(job_list), desc="Downloading jobs", unit="job") as pbar:
-                for future in as_completed(future_to_job):
-                    job, error = future.result()
+                for future in as_completed(future_to_success):
+                    success = future.result()
 
-                    if error:
-                        failed_downloads.append((job, error))
+                    if not success:
+                        failed_downloads += 1
                     else:
                         successful_downloads += 1
 
@@ -176,10 +178,10 @@ class HyP3Client:
                     pbar.set_postfix(
                         {
                             "Success": successful_downloads,
-                            "Failed": len(failed_downloads),
+                            "Failed": failed_downloads,
                         }
                     )
 
         self.logger.info(
-            f"Download complete: {successful_downloads} successful, {len(failed_downloads)} failed"
+            f"Download complete: {successful_downloads} successful, {failed_downloads} failed"
         )
