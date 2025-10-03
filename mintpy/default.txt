@@ -7,4 +7,8 @@ mintpy.load.demFile          = */*_dem_clipped.tif
 mintpy.load.incAngleFile     = */*_lv_theta_clipped.tif
 mintpy.load.azAngleFile      = */*_lv_phi_clipped.tif
 mintpy.load.waterMaskFile    = */*_water_mask_clipped.tif
+##---------network configuration
+mintpy.network.coherenceBased = yes
+mintpy.network.minCoherence   = 0.5
+mintpy.network.keepMinSpanTree = no
 # mintpy.troposphericDelay.method = no
