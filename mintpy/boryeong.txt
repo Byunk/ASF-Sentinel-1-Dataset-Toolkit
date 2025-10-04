@@ -1,0 +1,22 @@
+mintpy.load.processor        = hyp3
+##---------interferogram datasets
+mintpy.load.unwFile          = */*_unw_phase_clipped.tif
+mintpy.load.corFile          = */*_corr_clipped.tif
+##---------geometry datasets:
+mintpy.load.demFile          = */*_dem_clipped.tif
+mintpy.load.incAngleFile     = */*_lv_theta_clipped.tif
+mintpy.load.azAngleFile      = */*_lv_phi_clipped.tif
+mintpy.load.waterMaskFile    = */*_water_mask_clipped.tif
+##---------network configuration
+mintpy.network.coherenceBased = yes
+mintpy.network.minCoherence   = 0.5
+mintpy.network.keepMinSpanTree = no
+mintpy.troposphericDelay.method = no
+
+##---------custom configuration
+mintpy.reference.lalo = 36.394,126.5734
+mintpy.reference.date = 20170308
+
+##---------temporal subset
+mintpy.network.startDate = 20170101
+mintpy.network.endDate   = 20250131
