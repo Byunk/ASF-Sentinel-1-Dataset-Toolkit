@@ -39,6 +39,7 @@ dependencies = [
     { name = "hyp3-sdk" },
     { name = "mintpy" },
     { name = "pandas" },
+    { name = "shapely" },
     { name = "tqdm" },
 ]
 
@@ -54,6 +55,7 @@ requires-dist = [
     { name = "hyp3-sdk", specifier = ">=7.7.3" },
     { name = "mintpy", specifier = ">=1.6.2" },
     { name = "pandas", specifier = ">=2.3.2" },
+    { name = "shapely", specifier = ">=2.0.0" },
     { name = "tqdm", specifier = ">=4.66.0" },
 ]
 

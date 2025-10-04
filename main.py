@@ -9,6 +9,7 @@ from toolkit.insar import (
     get_common_overlap,
     interactive_timeseries_viewer,
     plot_velocity_geographic,
+    wkt_to_utm_bounds,
 )
 from toolkit.search import read_ids_from_file, sbas_pairs, stack_from_ids
 
@@ -151,7 +152,9 @@ def download_command(
     client.download(jobs, output_dir=output_dir, max_workers=max_workers)
 
 
-def clip_command(data_dir: str = "data"):
+def clip_command(data_dir: str = "data", wkt: str | None = None):
+    from osgeo import gdal, osr
+
     data_path = Path(data_dir)
     logger.info(f"Finding DEM files in {data_path}")
     files = list(data_path.glob("*/*_dem.tif"))
@@ -161,10 +164,28 @@ def clip_command(data_dir: str = "data"):
         return
 
     logger.info(f"Found {len(files)} DEM files")
-    logger.info("Calculating common overlap")
-    overlap = get_common_overlap(files)
-    logger.info(f"Common overlap: {overlap}")
-    logger.info("Clipping GeoTIFF files to common overlap")
+
+    if wkt:
+        logger.info("Using custom WKT geometry for clipping")
+        try:
+            # Detect EPSG code from first DEM file
+            info = gdal.Info(str(files[0]), format="json")
+            srs = osr.SpatialReference()
+            srs.ImportFromWkt(info["coordinateSystem"]["wkt"])
+            target_epsg = int(srs.GetAuthorityCode(None))
+            logger.info(f"Detected coordinate system: EPSG:{target_epsg}")
+
+            overlap = wkt_to_utm_bounds(wkt, target_epsg)
+            logger.info(f"Transformed bounds: {overlap}")
+        except Exception as e:
+            logger.error(f"Failed to parse WKT or detect coordinate system: {e}")
+            return
+    else:
+        logger.info("Calculating common overlap")
+        overlap = get_common_overlap(files)
+        logger.info(f"Common overlap: {overlap}")
+
+    logger.info("Clipping GeoTIFF files to overlap")
     clip_hyp3_products_to_common_overlap(data_path, overlap)
     logger.info("Clipping complete")
 
@@ -352,6 +373,12 @@ def parse_args() -> argparse.Namespace:
     clip_parser.add_argument(
         "--data-dir", type=str, default="data", help="Data directory (default: data)"
     )
+    clip_parser.add_argument(
+        "--wkt",
+        type=str,
+        default=None,
+        help="Custom WKT geometry string for clipping (e.g., 'POLYGON((...))')",
+    )
 
     # Visualize subcommand
     visualize_parser = subparsers.add_parser(
@@ -417,7 +444,7 @@ if __name__ == "__main__":
             max_workers=args.max_workers,
         )
     elif args.command == "clip":
-        clip_command(data_dir=args.data_dir)
+        clip_command(data_dir=args.data_dir, wkt=getattr(args, "wkt", None))
     elif args.command == "visualize":
         visualize_command(
             input_file=args.input,

@@ -4,6 +4,31 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 from pyproj import Transformer
+from shapely import wkt
+from shapely.ops import transform
+
+
+def wkt_to_utm_bounds(wkt_string: str, target_epsg: int) -> list[float]:
+    """Transform WKT geometry from lat/lon to target coordinate system and extract bounding box
+
+    Args:
+        wkt_string: WKT geometry string in EPSG:4326 (lat/lon)
+        target_epsg: Target EPSG code (e.g., 32652 for UTM Zone 52N)
+
+    Returns:
+        [ulx, uly, lrx, lry], the upper-left x, upper-left y, lower-right x, and lower-right y
+        corner coordinates in the target coordinate system
+    """
+    # Parse WKT (assumes EPSG:4326 lat/lon)
+    geometry = wkt.loads(wkt_string)
+
+    # Transform from EPSG:4326 to target CRS
+    transformer = Transformer.from_crs("EPSG:4326", f"EPSG:{target_epsg}", always_xy=True)
+    geometry_transformed = transform(transformer.transform, geometry)
+
+    # Extract bounds and convert to GDAL format
+    minx, miny, maxx, maxy = geometry_transformed.bounds
+    return [minx, maxy, maxx, miny]
 
 
 def get_common_overlap(files: list[str | Path]) -> list[float]:
