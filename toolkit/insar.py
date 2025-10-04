@@ -275,7 +275,7 @@ def plot_velocity_geographic(
     vmax = vmax_abs
 
     im = ax.pcolormesh(
-        lon, lat, velocity_cm, cmap="RdYlBu_r", vmin=vmin, vmax=vmax, shading="auto"
+        lon, lat, velocity_cm, cmap="RdBu", vmin=vmin, vmax=vmax, shading="auto"
     )
 
     # Add reference point
@@ -371,7 +371,7 @@ def interactive_timeseries_viewer(timeseries_file):
         lon,
         lat,
         timeseries_cm[0],
-        cmap="RdYlBu_r",
+        cmap="RdBu",
         vmin=vmin,
         vmax=vmax,
         shading="auto",
