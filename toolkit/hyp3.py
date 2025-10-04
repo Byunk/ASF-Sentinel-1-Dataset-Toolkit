@@ -156,6 +156,34 @@ class HyP3Client:
         if not job_list:
             self.logger.warning("No jobs to download")
             return
+        
+        # Filter out jobs whose files already exist
+        output_path = Path(output_dir)
+        jobs_to_download = []
+        skipped_count = 0
+
+        for job in job_list:
+            # Check if the job's product file already exists
+            if job.files:
+                # Get the expected filename from the job's files
+                filename = Path(job.files[0]['filename'])
+                expected_path = output_path / filename.stem  # Extracted directory name
+                
+                if expected_path.exists():
+                    self.logger.debug(f"Skipping job {job.job_id}: files already exist at {expected_path}")
+                    skipped_count += 1
+                    continue
+            
+            jobs_to_download.append(job)
+
+        if skipped_count > 0:
+            self.logger.info(f"Skipping {skipped_count} jobs with existing files")
+
+        if not jobs_to_download:
+            self.logger.info("All jobs already downloaded")
+            return
+
+        job_list = jobs_to_download
 
         failed_downloads = 0
         successful_downloads = 0
